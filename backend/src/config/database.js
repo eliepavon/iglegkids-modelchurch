@@ -1,39 +1,21 @@
 const { Pool } = require('pg');
-
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  max: 20
 });
-
-const query = async (text, params) => {
-  const start = Date.now();
-  try {
-    const res = await pool.query(text, params);
-    const duration = Date.now() - start;
-    if (duration > 500) console.warn('Slow query:', { text: text.slice(0,80), duration });
-    return res;
-  } catch (err) {
-    console.error('Query error:', err.message);
-    throw err;
-  }
+const query = async (t, p) => {
+  try { return await pool.query(t, p); }
+  catch(e) { console.error('DB Error:', e.message); throw e; }
 };
-
-const withTransaction = async (callback) => {
-  const client = await pool.connect();
+const withTransaction = async (cb) => {
+  const c = await pool.connect();
   try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+    await c.query('BEGIN');
+    const r = await cb(c);
+    await c.query('COMMIT');
+    return r;
+  } catch(e) { await c.query('ROLLBACK'); throw e; }
+  finally { c.release(); }
 };
-
 module.exports = { pool, query, withTransaction };
